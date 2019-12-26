@@ -21,32 +21,39 @@ fun main(args: Array<String>) {
 
     var id = 0
     while (true) {
-        Fuel.post(address)
-            .header(
-                Pair("DF", discrFrequency),
-                Pair("BS", batchSize),
-                Pair("TS", System.currentTimeMillis()),
-                Pair("ID", id++)
-            )
-            .body(
-                run {
-                    val shorts = ShortArray(batchSize) {
-                        val pt = it * timeStep * 6.28
+        runCatching {
+            Fuel.post(address)
+                .header(
+                    Pair("DF", discrFrequency),
+                    Pair("BS", batchSize),
+                    Pair("TS", System.currentTimeMillis()),
+                    Pair("ID", id++),
+                    Pair("Content-Type", "application/octet-stream")
+                )
+                .body(
+                    run {
+                        val shorts = ShortArray(batchSize) {
+                            val pt = (it+1) * timeStep * 6
 
-                        ((-0.3 * sin(pt - 2.44)
-                                - 0.2 * sin(2 * pt - 1.07)
-                                + 0.07 * sin(4 * pt + 0.87)
-                                ) * 1000).toShort()
+                            ((-0.3 * sin(pt - 2.44)
+                                    - 0.2 * sin(2 * pt - 1.07)
+                                    + 0.07 * sin(4 * pt + 0.87)
+                                    ) * 1000).toShort()
+                        }
+                        val bytes = ByteArray(batchSize * 2) { 0 }
+                        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(shorts)
+
+                        bytes
                     }
-                    val bytes = ByteArray(batchSize * 2){0}
-                    ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(shorts)
-
-                    bytes
+                )
+                .also { println(it) }
+                .response().let {
+                    println(String(it.third.get()))
                 }
-            )
-            .also { println(it) }
-            .response()
 
-        sleep((timeStep * batchSize).toLong())
+            sleep((timeStep * batchSize).toLong() * 1000)
+        }.onFailure {
+            println(it.message)
+        }
     }
 }
